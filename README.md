@@ -146,21 +146,35 @@ python telemetry_reader.py --mode attach --server-host localhost --server-port 5
     --http-host 127.0.0.1 --route /telemetry --drone-name "Drohne-1" --drone-id 1
 ```
 
-## Test-Endpoint (lokaler Echo-Server)
+## Test-Endpoint (mitgelieferter Mock-Server)
 
-Zum Ausprobieren ein minimaler Empfänger, der eingehende POSTs ausgibt:
+Solange der echte Endpoint noch nicht existiert, simuliert `echo_server.py` ihn:
+Er nimmt POST-Requests entgegen, gibt den JSON-Body übersichtlich in der Konsole
+aus und antwortet mit `{"ok": true}`.
 
-```python
-# echo_server.py  ->  python echo_server.py
-from aiohttp import web
+```bash
+python echo_server.py
+# oder mit eigenen Werten:
+python echo_server.py --host 0.0.0.0 --port 8000 --route /telemetry
+python echo_server.py --compact   # JSON einzeilig statt eingerückt
+```
 
-async def handler(request):
-    print(await request.json())
-    return web.json_response({"ok": True})
+| Parameter   | Default        | Bedeutung |
+|-------------|----------------|-----------|
+| `--host`    | `127.0.0.1`    | Host/Interface zum Lauschen. |
+| `--port`    | `8000`         | Port zum Lauschen. |
+| `--route`   | `/telemetry`   | Pfad, der POST-Requests akzeptiert. |
+| `--compact` | *(aus)*        | JSON einzeilig ausgeben statt eingerückt. |
 
-app = web.Application()
-app.router.add_post("/telemetry", handler)
-web.run_app(app, host="127.0.0.1", port=8000)
+Typischer Ablauf in zwei Terminals:
+
+```bash
+# Terminal 1 – Mock-Endpoint
+python echo_server.py --port 8000 --route /telemetry
+
+# Terminal 2 – Telemetrie-Sender
+python telemetry_reader.py --http-host 127.0.0.1 --http-port 8000 \
+    --route /telemetry --drone-name "Drohne-1" --drone-id 1
 ```
 
 ## Mehrere Drohnen
