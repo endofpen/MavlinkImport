@@ -85,20 +85,109 @@ Das gepostete Dokument enthält die Drohnen-Identität, einen Zeitstempel und un
 
 ```json
 {
-  "name": "Drohne-1",
-  "id": "1",
-  "timestamp": 1733740800.123,
+  "name": "Drohne-Maverick",
+  "id": "666",
+  "timestamp": 1781016780.5282433,
   "telemetry": {
-    "position": {
-      "latitude_deg": 47.1,
-      "longitude_deg": 8.5,
-      "absolute_altitude_m": 500.0,
-      "relative_altitude_m": 10.0
+    "actuator_control_target": null,
+    "actuator_output_status": null,
+    "altitude": null,
+    "armed": false,
+    "attitude_angular_velocity_body": {
+      "roll_rad_s": 0.0,
+      "pitch_rad_s": 0.0,
+      "yaw_rad_s": 0.0
     },
-    "flight_mode": "HOLD",
-    "battery": { "id": 0, "voltage_v": 12.3, "remaining_percent": 0.87 },
-    "wind": null,
-    "...": "alle 33 Stream-Schlüssel; nicht geliefert => null"
+    "attitude_euler": {
+      "roll_deg": -34.099998474121094,
+      "pitch_deg": 4.699999809265137,
+      "yaw_deg": 216.6999969482422,
+      "timestamp_us": 607812000
+    },
+    "attitude_quaternion": null,
+    "battery": {
+      "id": 0,
+      "temperature_degc": null,
+      "voltage_v": 22.98000144958496,
+      "current_battery_a": 0.949999988079071,
+      "capacity_consumed_ah": 0.16200000047683716,
+      "remaining_percent": 53.0,
+      "time_remaining_s": null,
+      "battery_function": "UNKNOWN"
+    },
+    "distance_sensor": null,
+    "fixedwing_metrics": {
+      "airspeed_m_s": 0.0,
+      "throttle_percentage": 0.8499999642372131,
+      "climb_rate_m_s": 0.0,
+      "groundspeed_m_s": 6.909999847412109,
+      "heading_deg": 216.0,
+      "absolute_altitude_m": 248.0699920654297
+    },
+    "flight_mode": "UNKNOWN",
+    "gps_info": {
+      "num_satellites": 5,
+      "fix_type": "FIX_3D"
+    },
+    "ground_truth": null,
+    "heading": {
+      "heading_deg": 2.16
+    },
+    "health": {
+      "is_gyrometer_calibration_ok": true,
+      "is_accelerometer_calibration_ok": true,
+      "is_magnetometer_calibration_ok": false,
+      "is_local_position_ok": true,
+      "is_global_position_ok": true,
+      "is_home_position_ok": false,
+      "is_armable": false
+    },
+    "health_all_ok": false,
+    "home": null,
+    "imu": null,
+    "in_air": null,
+    "landed_state": null,
+    "odometry": null,
+    "position": {
+      "latitude_deg": 50.6256292,
+      "longitude_deg": 6.8480631999999995,
+      "absolute_altitude_m": 248.07000732421875,
+      "relative_altitude_m": 248.07000732421875
+    },
+    "position_velocity_ned": null,
+    "raw_gps": {
+      "timestamp_us": 608314813,
+      "latitude_deg": 50.625627099999996,
+      "longitude_deg": 6.8480215,
+      "absolute_altitude_m": 246.92001342773438,
+      "hdop": 0.0,
+      "vdop": 0.0,
+      "velocity_m_s": 2.059999942779541,
+      "cog_deg": 64.5999984741211,
+      "altitude_ellipsoid_m": 246.92001342773438,
+      "horizontal_uncertainty_m": 24.940000534057617,
+      "vertical_uncertainty_m": 13.689001083374023,
+      "velocity_uncertainty_m_s": 5.046000003814697,
+      "heading_uncertainty_deg": 42949.671875,
+      "yaw_deg": 0.0
+    },
+    "raw_imu": null,
+    "rc_status": {
+      "was_available_once": false,
+      "is_available": false,
+      "signal_strength_percent": null
+    },
+    "scaled_imu": null,
+    "scaled_pressure": null,
+    "status_text": null,
+    "unix_epoch_time": null,
+    "velocity_ned": {
+      "north_m_s": 2.0899999141693115,
+      "east_m_s": 6.589999675750732,
+      "down_m_s": -3.1499998569488525
+    },
+    "vtol_state": null,
+    "wind": null
   }
 }
 ```
@@ -111,17 +200,6 @@ Abonnierte Streams (alle 33): `actuator_control_target`, `actuator_output_status
 `position_velocity_ned`, `raw_gps`, `raw_imu`, `rc_status`, `scaled_imu`,
 `scaled_pressure`, `status_text`, `unix_epoch_time`, `velocity_ned`, `vtol_state`,
 `wind`.
-
-## Capability-Report
-
-Standardmäßig werden **keine** Streamraten gesetzt. Wird `--rate-hz` auf einen Wert
-`>0` gesetzt, versucht das Programm beim Start für jeden Stream
-`set_rate_*(--rate-hz)`. Erfolg deutet darauf hin, dass der Autopilot den Stream
-unterstützt, ein abgelehnter Aufruf auf fehlende Unterstützung. Das Ergebnis wird
-als Capability-Report geloggt (`[Capability] set_rate erfolgreich: ...` /
-`... abgelehnt: ...`). MAVSDK bietet
-keine fertige Liste unterstützter Telemetrie — das ist der praktikable Weg, es zur
-Laufzeit zu ermitteln. Streams, die nie Daten liefern, bleiben im JSON auf `null`.
 
 ## Verbindungsmodi
 
@@ -178,10 +256,3 @@ python echo_server.py --port 8000 --route /telemetry
 python telemetry_reader.py --http-host 127.0.0.1 --http-port 8000 \
     --route /telemetry --drone-name "Drohne-1" --drone-id 1
 ```
-
-## Mehrere Drohnen
-
-Pro Drohne ein eigener `mavsdk_server` mit eigenem UDP-Port (14550, 14551, ...)
-und eigenem gRPC-Port. Im Skript dann `--server-port 50052` usw. setzen sowie je
-Drohne eigene `--drone-name`/`--drone-id`. Mehrere Python-Clients an einem Server
-funktionieren nicht zuverlässig (Streams werden "geklaut").
