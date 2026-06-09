@@ -179,6 +179,75 @@ python telemetry_reader.py --http-host 127.0.0.1 --http-port 8000 \
     --route /telemetry --drone-name "Drohne-1" --drone-id 1
 ```
 
+## Docker
+
+Das Image bringt Python, die Abhängigkeiten und den (statisch gelinkten,
+mitgelieferten) `mavsdk_server` mit. **Alle CLI-Parameter bleiben erhalten** — sie
+werden per `ENTRYPOINT` an `telemetry_reader.py` durchgereicht.
+
+### Bauen
+
+```bash
+docker build -t mavlinkimport .
+```
+
+### Einzelnen Container starten
+
+Alles nach dem Image-Namen sind die gewohnten Parameter:
+
+```bash
+docker run --rm \
+    -p 14550:14550/udp \
+    mavlinkimport \
+    --http-host host.docker.internal --http-port 8000 --route /telemetry \
+    --drone-name "Drohne-1" --drone-id 1
+```
+
+Zwei Netzwerk-Punkte sind dabei wichtig:
+
+1. **MAVLink von der Drohne (UDP):** Im Modus `server` lauscht der Container auf
+   `udpin://0.0.0.0:14550`. Der Port muss veröffentlicht werden: `-p 14550:14550/udp`.
+   Unter **Linux** ist `--network host` meist robuster für Drohnen-Kommunikation
+   (dann entfällt `-p`, und der Container erreicht das Drohnen-Netz direkt):
+   ```bash
+   docker run --rm --network host mavlinkimport \
+       --http-host 127.0.0.1 --http-port 8000 --route /telemetry \
+       --drone-name "Drohne-1" --drone-id 1
+   ```
+   Unter **Windows/macOS (Docker Desktop)** gibt es kein echtes `--network host`;
+   dort `-p 14550:14550/udp` nutzen.
+
+2. **Ziel-Endpoint:** Innerhalb des Containers ist `127.0.0.1` der Container selbst.
+   Läuft der REST-Server auf dem **Host**, mit `--http-host host.docker.internal`
+   darauf zeigen (Docker Desktop; unter Linux ggf.
+   `--add-host=host.docker.internal:host-gateway` ergänzen). Zeigt er auf einen
+   anderen Rechner, einfach dessen IP als `--http-host` angeben.
+
+### An laufenden mavsdk_server andocken (attach)
+
+Läuft der `mavsdk_server` außerhalb des Containers (z.B. auf dem Host):
+
+```bash
+docker run --rm mavlinkimport \
+    --mode attach --server-host host.docker.internal --server-port 50051 \
+    --http-host host.docker.internal --http-port 8000 --route /telemetry \
+    --drone-name "Drohne-1" --drone-id 1
+```
+
+### Test-Stack mit docker compose
+
+`docker-compose.yml` startet Sender **und** Mock-Endpoint zusammen. Der Sender
+erreicht den Endpoint über den Service-Namen `echo` (`--http-host echo`):
+
+```bash
+docker compose up --build
+# Logs des Endpoints sieht man im Compose-Output; stoppen mit Strg+C / docker compose down
+```
+
+Die Parameter stehen im `command:`-Block des `telemetry`-Service und können dort
+angepasst werden. In Produktion den `echo`-Service entfernen und `--http-host` auf
+den echten Server zeigen lassen.
+
 ## Mehrere Drohnen
 
 Pro Drohne ein eigener `mavsdk_server` mit eigenem UDP-Port (14550, 14551, ...)
