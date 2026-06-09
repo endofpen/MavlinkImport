@@ -216,40 +216,6 @@ async def connect(args: argparse.Namespace) -> System:
 
     return drone
 
-
-# ---------------------------------------------------------------------------
-# Best-Effort set_rate_* (+ Capability-Report)
-# ---------------------------------------------------------------------------
-
-async def apply_rates(drone: System, rate_hz: float) -> None:
-    """Versucht fuer jeden Stream set_rate_*(rate_hz) und loggt das Ergebnis.
-
-    Erfolg deutet darauf hin, dass der Autopilot den Stream unterstuetzt;
-    ein TelemetryError deutet auf fehlende Unterstuetzung hin.
-    """
-    if rate_hz <= 0:
-        print("[Rate] set_rate_* uebersprungen (--rate-hz 0).")
-        return
-
-    print(f"[Rate] Setze Streamraten auf {rate_hz} Hz (Best-Effort) ...")
-    supported, unsupported = [], []
-    for name in STREAM_NAMES:
-        setter = getattr(drone.telemetry, f"set_rate_{name}", None)
-        if setter is None:
-            continue  # z.B. raw_gps, wind: kein set_rate vorhanden
-        try:
-            await setter(rate_hz)
-            supported.append(name)
-        except TelemetryError as exc:
-            unsupported.append(f"{name} ({exc})")
-
-    print(f"[Capability] set_rate erfolgreich ({len(supported)}): "
-          f"{', '.join(supported) if supported else '-'}")
-    if unsupported:
-        print(f"[Capability] set_rate abgelehnt ({len(unsupported)}): "
-              f"{', '.join(unsupported)}")
-
-
 # ---------------------------------------------------------------------------
 # Producer: ein Stream je Task aktualisiert den gemeinsamen Zustand
 # ---------------------------------------------------------------------------
@@ -313,8 +279,6 @@ async def post_loop(args: argparse.Namespace, latest: dict) -> None:
 async def run() -> None:
     args = parse_args()
     drone = await connect(args)
-
-    await apply_rates(drone, args.rate_hz)
 
     # Gemeinsamer Zustand: alle Streams initial null.
     latest = {name: None for name in STREAM_NAMES}
