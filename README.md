@@ -75,7 +75,7 @@ Der Endpoint ist ungesichert — es werden keine Auth-Header/Tokens gesendet.
 | Parameter      | Default | Bedeutung |
 |----------------|---------|-----------|
 | `--interval`   | `1.0`   | POST-Intervall in Sekunden (wie oft das Gesamt-JSON gesendet wird). |
-| `--rate-hz`    | `5.0`   | Ziel-Rate für Best-Effort `set_rate_*` der Streams. `0` = nicht setzen. |
+| `--rate-hz`    | `0.0`   | Ziel-Rate für Best-Effort `set_rate_*` der Streams. `0` = nicht setzen (Standard); `>0` aktiviert das Setzen. |
 | `--print`      | *(aus)* | Das gesendete JSON zusätzlich in der Konsole ausgeben. |
 
 ## Gesendetes JSON
@@ -114,10 +114,12 @@ Abonnierte Streams (alle 33): `actuator_control_target`, `actuator_output_status
 
 ## Capability-Report
 
-Beim Start versucht das Programm für jeden Stream `set_rate_*(--rate-hz)`. Erfolg
-deutet darauf hin, dass der Autopilot den Stream unterstützt, ein abgelehnter
-Aufruf auf fehlende Unterstützung. Das Ergebnis wird als Capability-Report geloggt
-(`[Capability] set_rate erfolgreich: ...` / `... abgelehnt: ...`). MAVSDK bietet
+Standardmäßig werden **keine** Streamraten gesetzt. Wird `--rate-hz` auf einen Wert
+`>0` gesetzt, versucht das Programm beim Start für jeden Stream
+`set_rate_*(--rate-hz)`. Erfolg deutet darauf hin, dass der Autopilot den Stream
+unterstützt, ein abgelehnter Aufruf auf fehlende Unterstützung. Das Ergebnis wird
+als Capability-Report geloggt (`[Capability] set_rate erfolgreich: ...` /
+`... abgelehnt: ...`). MAVSDK bietet
 keine fertige Liste unterstützter Telemetrie — das ist der praktikable Weg, es zur
 Laufzeit zu ermitteln. Streams, die nie Daten liefern, bleiben im JSON auf `null`.
 

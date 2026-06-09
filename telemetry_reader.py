@@ -176,8 +176,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rate-hz",
         type=float,
-        default=5.0,
-        help="Ziel-Rate fuer Best-Effort set_rate_* der Streams (0 = nicht setzen).",
+        default=0.0,
+        help="Ziel-Rate fuer Best-Effort set_rate_* der Streams. "
+        "0 = nicht setzen (Standard); >0 aktiviert das Setzen der Raten.",
     )
     parser.add_argument(
         "--print",
