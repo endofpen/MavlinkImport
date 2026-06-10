@@ -18,3 +18,9 @@ env/
 # mavsdk_server Binaries
 mavsdk_server*
 *.exe
+
+# MediaMTX (Media-Server-Binary + automatisch erzeugte WebRTC-Zertifikate)
+mediamtx
+mediamtx.yml
+auto.crt
+auto.key
