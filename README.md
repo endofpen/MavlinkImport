@@ -345,3 +345,122 @@ Pro Drohne ein eigener `mavsdk_server` mit eigenem UDP-Port (14550, 14551, ...)
 und eigenem gRPC-Port. Im Skript dann `--server-port 50052` usw. setzen sowie je
 Drohne eigene `--drone-name`/`--drone-id`. Mehrere Python-Clients an einem Server
 funktionieren nicht zuverlässig (Streams werden "geklaut").
+
+---
+
+# Videostream verteilen (`video_distributor.py`)
+
+Speist das Videobild der FPV-VR-Brille ein (**HDMI → Capture-Card → USB →
+Laptop**) und verteilt es **latenzarm an mehrere Services gleichzeitig**.
+
+Statt jedes Protokoll selbst zu bauen, orchestriert das Programm den Media-Server
+[**MediaMTX**](https://github.com/bluenviron/mediamtx): **FFmpeg** liest die
+Capture-Card (unter Windows per DirectShow) und pusht sie **einmal** low-latency
+(H.264, `-tune zerolatency`) in MediaMTX. Dieser stellt die **eine** Quelle
+**gleichzeitig** als **RTSP + WebRTC + SRT + RTMP + (LL-)HLS** bereit
+("1 → viele", ohne Zusatzlatenz).
+
+```
+FPV-VR-Brille ──HDMI──▶ Capture-Card ──USB──▶ Laptop
+                                              │ video_distributor.py
+                              ┌───────────────┴───────────────┐
+                              ▼                                ▼
+                   FFmpeg (Capture, H.264          MediaMTX (Media-Server)
+                   zerolatency) ──RTSP push──▶      RTSP / WebRTC / SRT /
+                                                    RTMP / LL-HLS  → viele
+```
+
+## Welches Protokoll für wen?
+
+| Verfahren  | Latenz             | Typische Konsumenten                    |
+|------------|--------------------|-----------------------------------------|
+| **WebRTC** | sehr niedrig (~1 Frame) | Browser, latenzkritische Clients   |
+| **SRT**    | niedrig            | andere Rechner/Netz, robust über WLAN   |
+| **RTSP**   | niedrig            | OpenCV/FFmpeg/CV-Services, OBS, VLC      |
+| **RTMP**   | mittel             | Streaming-/Recording-Tools              |
+| **(LL-)HLS** | hoch (1–3 s+)    | Browser ohne WebRTC, max. Kompatibilität|
+
+Für **Python-/CV-Services** empfiehlt sich **RTSP** (oder **SRT**), für
+latenzkritische Anzeige **WebRTC**.
+
+## Voraussetzungen
+
+* **FFmpeg** im PATH (oder via `--ffmpeg` angeben).
+* **MediaMTX**-Binary (Windows: `mediamtx.exe`) im PATH oder via `--mediamtx`.
+  Download: <https://github.com/bluenviron/mediamtx/releases>.
+* Auf Windows: das **Microsoft Visual C++ Redistributable x64** (siehe oben).
+* Keine zusätzlichen pip-Pakete – das Programm nutzt nur die Python-Standardbibliothek.
+
+## Schnellstart (Windows)
+
+```bash
+# 1) Capture-Card finden (DirectShow-Gerätename ermitteln)
+python video_distributor.py --list-devices
+
+# 2) Verteilung starten (Gerätename aus Schritt 1 einsetzen)
+python video_distributor.py --device "USB Video" --path fpv
+
+# Ohne Hardware testen (FFmpeg-Testbild statt Capture-Card):
+python video_distributor.py --test-source --path fpv
+```
+
+Beenden mit `Strg+C` (FFmpeg und MediaMTX werden sauber gestoppt).
+
+## Konsumenten-URLs
+
+Bei `--path fpv` und Standard-Ports (im Netz `127.0.0.1` durch die Laptop-IP ersetzen):
+
+| Protokoll | URL |
+|-----------|-----|
+| RTSP   | `rtsp://127.0.0.1:8554/fpv` |
+| WebRTC | `http://127.0.0.1:8889/fpv` (im Browser öffnen) |
+| SRT    | `srt://127.0.0.1:8890?streamid=read:fpv` |
+| RTMP   | `rtmp://127.0.0.1:1935/fpv` |
+| HLS    | `http://127.0.0.1:8888/fpv/index.m3u8` |
+
+Ein Python-/CV-Service liest den Stream z.B. latenzarm so:
+
+```python
+import os, cv2
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+cap = cv2.VideoCapture("rtsp://127.0.0.1:8554/fpv", cv2.CAP_FFMPEG)
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+ok, frame = cap.read()
+```
+
+## Test-Konsument (`video_consumer.py`)
+
+Gegenstück zu `echo_server.py`: greift den Stream per RTSP ab, misst die FPS und
+zeigt optional ein Vorschaufenster. Benötigt **separat** `pip install opencv-python`.
+
+```bash
+python video_consumer.py rtsp://127.0.0.1:8554/fpv          # FPS in der Konsole
+python video_consumer.py rtsp://127.0.0.1:8554/fpv --show   # Vorschaufenster
+
+# Ganz ohne Python:
+ffplay -fflags nobuffer -flags low_delay rtsp://127.0.0.1:8554/fpv
+```
+
+## Alle Parameter
+
+| Parameter        | Default       | Bedeutung |
+|------------------|---------------|-----------|
+| `--device`       | *(Pflicht\*)* | DirectShow-Gerätename der Capture-Card (Windows). |
+| `--list-devices` | *(aus)*       | Verfügbare DirectShow-Geräte auflisten und beenden. |
+| `--test-source`  | *(aus)*       | FFmpeg-Testbild statt Capture-Card (Abnahme ohne Hardware). |
+| `--resolution`   | `1280x720`    | Auflösung der Capture-Eingabe. |
+| `--framerate`    | `60`          | Bildrate der Capture-Eingabe (fps). |
+| `--input-format` | `mjpeg`       | Eingangsformat der Karte (dshow), z.B. `mjpeg`/`yuyv422`. |
+| `--codec`        | `h264`        | `h264`: latenzarm neu encodieren. `copy`: durchreichen (Karte liefert schon H.264). |
+| `--bitrate`      | `6M`          | Ziel-Bitrate der H.264-Encodierung. |
+| `--path`         | `fpv`         | Pfadname im Media-Server (ergibt die Stream-URLs). |
+| `--rtsp-port`    | `8554`        | RTSP-Port. |
+| `--webrtc-port`  | `8889`        | WebRTC-Port. |
+| `--srt-port`     | `8890`        | SRT-Port. |
+| `--rtmp-port`    | `1935`        | RTMP-Port. |
+| `--hls-port`     | `8888`        | HLS-Port. |
+| `--ffmpeg`       | *(PATH)*      | Pfad zur FFmpeg-Binary. |
+| `--mediamtx`     | *(PATH)*      | Pfad zur MediaMTX-Binary. |
+| `--print`        | *(aus)*       | Vollständige Ausgabe von FFmpeg und MediaMTX zeigen. |
+
+\* `--device` ist Pflicht, außer bei `--list-devices` oder `--test-source`.
